@@ -1,0 +1,1 @@
+.\wordle.exe -cheat
