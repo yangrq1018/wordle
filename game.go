@@ -144,11 +144,23 @@ func (g *Game) shouldStop(hint wordHint) bool {
 // 1-hit, but wrong position
 // 2-bingo
 func (g *Game) validate(guess word) (hint wordHint) {
+	mismatchSet := hashset.New(0, generic.Equals[byte], generic.HashUint8)
+	// 第一遍标绿
 	for i := 0; i < wordSize; i++ {
 		if guess[i] == g.secret[i] {
 			hint[i] = 2
-		} else if g.secretHash.Has(guess[i]) {
-			hint[i] = 1
+		} else {
+			mismatchSet.Put(g.secret[i])
+		}
+	}
+
+	// 对于非绿的字，判断是否在第一遍不匹配的字符集中
+	for i := 0; i < wordSize; i++ {
+		if hint[i] != 2 {
+			if mismatchSet.Has(guess[i]) {
+				hint[i] = 1
+				mismatchSet.Remove(guess[i])
+			}
 		}
 	}
 	return
