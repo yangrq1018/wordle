@@ -99,19 +99,28 @@ func (g *Game) Start() (win bool) {
 		}
 
 		result := g.readWord(guess)
-		g.printHints()
+		g.screen()
 		if g.shouldStop(result) {
-			color.Green("You win! The secret word was %s.\n", g.secret)
+			g.win()
 			return true
 		}
 
 		if g.guessIndex == maxGuess {
 			// has exhausted all the chances
-			color.Red("You lose by using up all the chances! The secret word was %s.\n", g.secret)
+			g.lose()
 			return
 		}
 	}
 	return
+}
+
+func (g *Game) win() {
+	color.Green("You win! The secret word is %s.\n", g.secret)
+	// todo check word meaning
+}
+
+func (g *Game) lose() {
+	color.Red("You lose by using up all the chances! The secret word is %s.\n", g.secret)
 }
 
 func (g *Game) SetCheat(cheat bool) {
@@ -172,31 +181,90 @@ var (
 	green  = color.New(color.FgGreen)
 )
 
+func printer(i uint) (printer *color.Color) {
+	switch i {
+	case 1:
+		printer = yellow
+	case 2:
+		printer = green
+	default:
+		printer = white
+	}
+	return printer
+}
+
 // printHint clears the screen and print all historical guesses (colored by hints)
 func (g *Game) printHint(guess word, hint wordHint) {
 	for i := 0; i < wordSize; i++ {
-		var printer *color.Color
-		switch hint[i] {
-		case 1:
-			printer = yellow
-		case 2:
-			printer = green
-		default:
-			printer = white
-		}
 		// strings.ToUpper on a single byte
-		printer.Fprintf(g.Out, "%c", unicode.ToUpper(rune(guess[i])))
+		printer(hint[i]).Fprintf(g.Out, "%c", unicode.ToUpper(rune(guess[i])))
 	}
-	fmt.Println()
 }
 
-func clearHistory(out io.Writer) {
+func (g *Game) knownLetters() ([26]byte, [26]*color.Color) {
+	var (
+		locRight  = hashset.New(0, generic.Equals[byte], generic.HashUint8)
+		inWord    = hashset.New(0, generic.Equals[byte], generic.HashUint8)
+		notInWord = hashset.New(0, generic.Equals[byte], generic.HashUint8)
+	)
+	for i := 0; i < g.guessIndex; i++ {
+		for j := range g.hints[i] {
+			switch g.hints[i][j] {
+			case 2:
+				locRight.Put(g.guesses[i][j])
+			case 1:
+				inWord.Put(g.guesses[i][j])
+			case 0:
+				notInWord.Put(g.guesses[i][j])
+			}
+		}
+	}
+
+	var (
+		alphabet [26]byte
+		hints    [26]*color.Color
+	)
+
+	for i := byte('a'); i <= byte('z'); i++ {
+		alphabet[i-'a'] = i + 'A' - 'a'
+		if locRight.Has(i) {
+			hints[i-'a'] = green
+		} else if inWord.Has(i) {
+			hints[i-'a'] = yellow
+		} else if notInWord.Has(i) {
+			hints[i-'a'] = nil // invisible
+		} else {
+			hints[i-'a'] = white
+		}
+	}
+	return alphabet, hints
+}
+
+func cls(out io.Writer) {
 	fmt.Fprintf(out, "\033[H\033[2J")
 }
 
-func (g *Game) printHints() {
-	clearHistory(g.Out)
-	for i := 0; i < g.guessIndex; i++ {
-		g.printHint(g.guesses[i], g.hints[i])
+func (g *Game) screen() {
+	cls(g.Out)
+	for i := 0; i < maxGuess; i++ {
+		if i < g.guessIndex {
+			g.printHint(g.guesses[i], g.hints[i])
+		} else {
+			fmt.Fprint(g.Out, "_____")
+		}
+		fmt.Println()
 	}
+	// the current known letters
+	letters, hints := g.knownLetters()
+	fmt.Println("Known letters:")
+	for i := range letters {
+		switch hints[i] {
+		case nil:
+			fmt.Fprint(g.Out, " ")
+		default:
+			hints[i].Fprintf(g.Out, "%c", letters[i])
+		}
+
+	}
+	fmt.Println()
 }
