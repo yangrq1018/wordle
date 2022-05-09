@@ -1,0 +1,1 @@
+.\wordle.exe -dict dictionary/large.txt -loop

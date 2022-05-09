@@ -1,0 +1,33 @@
+name: Test, build Go binary and create a release
+on:
+  push:
+    tags:
+     - v* # match any version tag starting with "v"
+  workflow_dispatch: # make manual trigger possible
+jobs:
+  test-build-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write # permission needed to create a release
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v3
+        with:
+          go-version: '1.18.1' # The Go version to download (if necessary) and use.
+      - name: run tests
+        run: go test .
+      - name: build binary
+        run: ./scripts/build.ps1
+      - name: list build assets
+        run: Get-ChildItem -Recurse build
+      - name: zip release ball
+        # zip exclude root
+        run: Compress-Archive -Path build/* -Destination wordle-win.zip
+      - name: publish release
+        uses: "marvinpinto/action-automatic-releases@latest"
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          prerelease: false
+          files: |
+            ./wordle-win.zip
+      - run: echo "🍏 This job's status is ${{ job.status }}."
