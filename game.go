@@ -22,14 +22,14 @@ type word [wordSize]byte
 type wordHint [wordSize]uint
 
 type Game struct {
-	dict       *Dictionary
-	guesses    [maxGuess]word
-	hints      [maxGuess]wordHint
-	guessIndex int  // the current attempt
-	secret     word // the final answer
-	secretHash *hashset.Set[byte]
-	caps       bool // play the game in capitalized mode
-	cheat      bool
+	dict          *Dictionary
+	guesses       [maxGuess]word
+	hints         [maxGuess]wordHint
+	guessIndex    int  // the current attempt
+	secret        word // the final answer
+	cheat         bool
+	loop          bool
+	gameAttempted int
 
 	In  io.Reader // the stream game reads from, default to os.Stdin
 	Out io.Writer // the stream game prints to, default to os.Stdout
@@ -37,44 +37,57 @@ type Game struct {
 
 func NewGame(secret string, file string) *Game {
 	g := new(Game)
-	g.secretHash = hashset.New(wordSize, generic.Equals[byte], generic.HashUint8)
 	g.dict = NewDictionary(file)
 	g.In = os.Stdin
 	g.Out = color.Output
 
 	if secret == "" {
-		// randomly pick a secret word from dict
-		var qualified []string
-		for _, k := range g.dict.words {
-			if len(k) == wordSize {
-				qualified = append(qualified, k)
-			}
-		}
-		r := rand.New(rand.NewSource(time.Now().Unix()))
-		secret = qualified[r.Intn(len(qualified))]
+		g.genSecret()
+	} else {
+		g.setSecret(secret)
 	}
+	return g
+}
 
+func (g *Game) genSecret() {
+	// randomly pick a word from dictionary
+	var qualified []string
+	for _, k := range g.dict.words {
+		if len(k) == wordSize {
+			qualified = append(qualified, k)
+		}
+	}
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+	g.setSecret(qualified[r.Intn(len(qualified))])
+}
+
+func (g *Game) setSecret(secret string) {
 	if len(secret) != wordSize {
 		panic("Secret must match word size")
 	}
 	if !g.dict.IsWord(secret) {
 		panic("Secret must be a valid word")
 	}
-
 	for i := 0; i < wordSize; i++ {
 		g.secret[i] = secret[i]
-		g.secretHash.Put(secret[i])
 	}
-
-	return g
 }
 
 func (g *Game) Start() (win bool) {
+	r := bufio.NewScanner(g.In)
+
+restart:
+	if g.loop && g.gameAttempted > 0 {
+		// prompt for user keystroke
+		fmt.Fprintf(g.Out, "Press any key to restart or Ctrl+C to exit.\n")
+		bufio.NewReader(g.In).ReadLine()
+		cls(g.Out)
+	}
 	if g.cheat {
-		color.White("The secret word is: %s", g.secret)
+		color.White("The secret word is %s", g.secret)
 	}
 	color.White("Start by typing a five letter word, then press ENTER.")
-	r := bufio.NewScanner(g.In)
+
 	for r.Scan() {
 		if r.Err() == io.EOF {
 			return
@@ -102,29 +115,49 @@ func (g *Game) Start() (win bool) {
 		g.screen()
 		if g.shouldStop(result) {
 			g.win()
+			if g.loop {
+				g.reset()
+				g.genSecret()
+				goto restart
+			}
 			return true
 		}
 
 		if g.guessIndex == maxGuess {
 			// has exhausted all the chances
 			g.lose()
+			if g.loop {
+				g.reset()
+				g.genSecret()
+				goto restart
+			}
 			return
 		}
 	}
 	return
 }
 
+// note reset does not reset the secret word
+func (g *Game) reset() {
+	g.guessIndex = 0
+}
+
 func (g *Game) win() {
+	g.gameAttempted++
 	color.Green("You win! The secret word is %s.\n", g.secret)
-	// todo check word meaning
 }
 
 func (g *Game) lose() {
+	g.gameAttempted++
 	color.Red("You lose by using up all the chances! The secret word is %s.\n", g.secret)
 }
 
 func (g *Game) SetCheat(cheat bool) {
 	g.cheat = cheat
+}
+
+func (g *Game) Loop() {
+	g.loop = true
 }
 
 // readWord reads in a word from the user, as a new guess
@@ -254,9 +287,9 @@ func (g *Game) screen() {
 		}
 		fmt.Println()
 	}
-	// the current known letters
+
 	letters, hints := g.knownLetters()
-	fmt.Println("Known letters:")
+	fmt.Println("Knowledge:")
 	for i := range letters {
 		switch hints[i] {
 		case nil:

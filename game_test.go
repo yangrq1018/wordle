@@ -8,15 +8,17 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const dictFilePath = "dictionary/large.txt"
+
 func TestDictionary(t *testing.T) {
-	d := NewDictionary("large.txt")
+	d := NewDictionary(dictFilePath)
 	assert.True(t, d.IsWord("cat"))
 	assert.True(t, d.IsWord("tidal"))
 	assert.False(t, d.IsWord("bilibili"))
 }
 
 func TestWinGame(t *testing.T) {
-	g := NewGame("midst", "large.txt")
+	g := NewGame("midst", dictFilePath)
 	mockIn := bytes.NewBuffer(nil)
 	mockOut := bytes.NewBuffer(nil)
 	g.In = mockIn
@@ -34,7 +36,7 @@ midst
 }
 
 func TestLoseGame(t *testing.T) {
-	g := NewGame("midst", "large.txt")
+	g := NewGame("midst", dictFilePath)
 	mockIn := bytes.NewBuffer(nil)
 	mockOut := bytes.NewBuffer(nil)
 	g.In = mockIn
