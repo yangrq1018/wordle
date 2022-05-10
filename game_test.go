@@ -53,3 +53,12 @@ chair
 	assert.NoError(t, err)
 	assert.False(t, g.Start())
 }
+
+func TestWordMeaning(t *testing.T) {
+	for _, w := range []word{
+		{'h', 'e', 'l', 'l', 'o'},
+		{'s', 'w', 'o', 'r', 'd'},
+	} {
+		t.Log("\n" + getMeaningOfWord(w))
+	}
+}

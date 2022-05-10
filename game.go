@@ -15,11 +15,18 @@ import (
 	"github.com/zyedidia/generic/hashset"
 )
 
-const maxGuess = 6
-const wordSize = 5
+const (
+	maxGuess     = 6
+	wordSize     = 5
+	alphabetSize = 26
+)
 
 type word [wordSize]byte
 type wordHint [wordSize]uint
+
+func (w word) String() string {
+	return string(w[:])
+}
 
 type Game struct {
 	dict          *Dictionary
@@ -78,15 +85,15 @@ func (g *Game) Start() (win bool) {
 
 restart:
 	if g.loop && g.gameAttempted > 0 {
-		// prompt for user keystroke
-		fmt.Fprintf(g.Out, "Press any key to restart or Ctrl+C to exit.\n")
+		// prompt for user ENTER
+		fmt.Fprintf(g.Out, "Press [ENTER] to restart or [Ctrl+C] to exit\n")
 		bufio.NewReader(g.In).ReadLine()
 		cls(g.Out)
 	}
 	if g.cheat {
 		color.White("The secret word is %s", g.secret)
 	}
-	color.White("Start by typing a five letter word, then press ENTER.")
+	color.White("Start by typing a five letter word, then press [ENTER]")
 
 	for r.Scan() {
 		if r.Err() == io.EOF {
@@ -106,7 +113,7 @@ restart:
 		}
 
 		// check guess is legal world
-		if s := strings.ToLower(string(guess[:])); !g.dict.IsWord(s) {
+		if s := strings.ToLower(guess.String()); !g.dict.IsWord(s) {
 			color.Red("%s: not a word, try again", s)
 			continue
 		}
@@ -145,11 +152,13 @@ func (g *Game) reset() {
 func (g *Game) win() {
 	g.gameAttempted++
 	color.Green("You win! The secret word is %s.\n", g.secret)
+	color.White(getMeaningOfWord(g.secret))
 }
 
 func (g *Game) lose() {
 	g.gameAttempted++
 	color.Red("You lose by using up all the chances! The secret word is %s.\n", g.secret)
+	color.White(getMeaningOfWord(g.secret))
 }
 
 func (g *Game) SetCheat(cheat bool) {
@@ -180,8 +189,7 @@ func (g *Game) shouldStop(hint wordHint) bool {
 	return true
 }
 
-// validate compares the guess word with the secret answer,
-// output the hints on each digit
+// validate compares the guess word with the secret answer, output the hints on each position
 // 0-incorrect
 // 1-hit, but wrong position
 // 2-bingo
@@ -206,24 +214,6 @@ func (g *Game) validate(guess word) (hint wordHint) {
 		}
 	}
 	return
-}
-
-var (
-	white  = color.New(color.FgWhite)
-	yellow = color.New(color.FgYellow)
-	green  = color.New(color.FgGreen)
-)
-
-func printer(i uint) (printer *color.Color) {
-	switch i {
-	case 1:
-		printer = yellow
-	case 2:
-		printer = green
-	default:
-		printer = white
-	}
-	return printer
 }
 
 // printHint clears the screen and print all historical guesses (colored by hints)
@@ -254,8 +244,8 @@ func (g *Game) knownLetters() ([26]byte, [26]*color.Color) {
 	}
 
 	var (
-		alphabet [26]byte
-		hints    [26]*color.Color
+		alphabet [alphabetSize]byte
+		hints    [alphabetSize]*color.Color
 	)
 
 	for i := byte('a'); i <= byte('z'); i++ {
@@ -273,17 +263,13 @@ func (g *Game) knownLetters() ([26]byte, [26]*color.Color) {
 	return alphabet, hints
 }
 
-func cls(out io.Writer) {
-	fmt.Fprintf(out, "\033[H\033[2J")
-}
-
 func (g *Game) screen() {
 	cls(g.Out)
 	for i := 0; i < maxGuess; i++ {
 		if i < g.guessIndex {
 			g.printHint(g.guesses[i], g.hints[i])
 		} else {
-			fmt.Fprint(g.Out, "_____")
+			fmt.Fprint(g.Out, strings.Repeat("_", wordSize))
 		}
 		fmt.Println()
 	}

@@ -5,7 +5,7 @@ on:
      - v* # match any version tag starting with "v"
   workflow_dispatch: # make manual trigger possible
 jobs:
-  test-build-release:
+  test-build-release-win:
     runs-on: windows-latest
     permissions:
       contents: write # permission needed to create a release
